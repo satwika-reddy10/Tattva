@@ -28,8 +28,10 @@
 }
 
 .Sidebar.collapsed {
-  width: 70px;
+  width: 60px;
   overflow: hidden;
+  padding: 20px 10px;
+  align-items: center;
 }
 
 .SidebarTop {
@@ -43,6 +45,11 @@
   font-weight: 600;
   color: white;
   text-align: center;
+  white-space: nowrap;
+}
+
+.Sidebar.collapsed .AppTitle {
+  display: none;
 }
 
 .NewChatButton {
@@ -58,10 +65,21 @@
   font-size: 15px;
   font-weight: 500;
   transition: background 0.2s ease;
+  justify-content: center;
 }
 
 .NewChatButton:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+.Sidebar.collapsed .NewChatButton {
+  padding: 12px;
+  width: 40px;
+  height: 40px;
+}
+
+.Sidebar.collapsed .NewChatButton span {
+  display: none;
 }
 
 .SearchBox {
@@ -72,6 +90,10 @@
   background: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.Sidebar.collapsed .SearchBox {
+  display: none;
 }
 
 .SearchBox input {
@@ -87,6 +109,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.Sidebar.collapsed .SidebarHeader {
+  display: none;
 }
 
 .SidebarTitle {
@@ -131,6 +157,14 @@
   align-items: center;
   justify-content: space-between;
   transition: background 0.2s ease, transform 0.1s ease;
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.Sidebar.collapsed .HistoryItem {
+  padding: 10px;
+  justify-content: center;
 }
 
 .HistoryItem:hover {
@@ -143,9 +177,32 @@
   color: #004aad;
 }
 
+.Sidebar.collapsed .HistoryItem.active {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.HistoryItem.active .ChatActions button {
+  color: #004aad;
+}
+
+.ChatName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.Sidebar.collapsed .ChatName {
+  display: none;
+}
+
 .ChatActions {
   display: flex;
   gap: 8px;
+}
+
+.Sidebar.collapsed .ChatActions {
+  display: none;
 }
 
 .ChatActions button {
@@ -160,6 +217,10 @@
 
 .ChatActions button:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.HistoryItem.active .ChatActions button:hover {
+  background: rgba(0, 74, 173, 0.2);
 }
 
 .AccountSection {
@@ -177,11 +238,30 @@
   width: 100%;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 8px;
   transition: background 0.2s ease;
+}
+
+.Sidebar.collapsed .AccountButton {
+  justify-content: center;
+  padding: 10px;
+  width: 40px;
+  height: 40px;
 }
 
 .AccountButton:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+.AccountButton span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.Sidebar.collapsed .AccountButton span {
+  display: none;
 }
 
 .AccountMenu {
@@ -197,6 +277,10 @@
   flex-direction: column;
   gap: 5px;
   z-index: 30;
+}
+
+.Sidebar.collapsed .AccountMenu {
+  left: 10px;
 }
 
 .AccountMenu button {
@@ -233,7 +317,7 @@
 }
 
 .RightPanel.with-preview {
-  padding-right: 420px;
+  padding-right: 50%;
 }
 
 .ChatContainer {
@@ -438,7 +522,7 @@
   position: fixed;
   right: 0;
   top: 0;
-  width: 400px;
+  width: 50%;
   height: 100vh;
   background: white;
   box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
@@ -970,4 +1054,79 @@
 .dark-mode .react-markdown th, 
 .dark-mode .react-markdown td {
   border-color: #555;
+}
+/* Account Info Styles */
+.AccountInfo {
+  padding: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 5px;
+}
+
+.AccountEmail {
+  font-size: 14px;
+  font-weight: 500;
+  color: #004aad;
+}
+
+.AccountUsername {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.dark-mode .AccountEmail {
+  color: #a0c4ff;
+}
+
+.dark-mode .AccountUsername {
+  color: #bbb;
+}
+
+.dark-mode .AccountInfo {
+  border-bottom-color: #555;
+}
+
+/* Collapsed Sidebar Icons */
+.CollapsedIcon {
+  display: none;
+}
+
+.Sidebar.collapsed .CollapsedIcon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: 8px 0;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.Sidebar.collapsed .CollapsedIcon:hover {
+  transform: scale(1.1);
+}
+
+/* Active chat indicator for collapsed sidebar */
+.Sidebar.collapsed .HistoryItem.active::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background-color: white;
+  border-radius: 50%;
+}
+
+/* Pinned chat indicator for collapsed sidebar */
+.Sidebar.collapsed .HistoryItem.pinned::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background-color: #ffd700;
+  border-radius: 50%;
 }

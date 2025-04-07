@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { UploadCloud, Send, Plus, FileText, Loader2, AlertTriangle, Paperclip, Search, Pin, Trash2, Edit, ChevronLeft, X, Copy, Trash, User, LogOut, Settings, Moon, Sun } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { UploadCloud, Send, Plus, FileText, Loader2, AlertTriangle, Paperclip, Search, Pin, Trash2, Edit, ChevronLeft, X, Copy, Trash, User, LogOut, Settings, Moon, Sun, LogIn, UserPlus, AlertCircle, MessageSquare } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
@@ -16,7 +17,6 @@ function DocumentPreview({ file, onClose }) {
     const readFile = () => {
       try {
         const reader = new FileReader();
-        
         if (file.type === "application/pdf") {
           reader.onload = (e) => {
             setFileContent({
@@ -27,7 +27,6 @@ function DocumentPreview({ file, onClose }) {
           };
           reader.readAsArrayBuffer(file);
         } else if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-          // For DOCX files, we'll just show a message since rendering is complex
           setFileContent({
             type: "docx",
             name: file.name
@@ -60,7 +59,7 @@ function DocumentPreview({ file, onClose }) {
           <X size={20} />
         </button>
       </div>
-      
+
       <div className="PreviewContent">
         {loading ? (
           <div className="LoadingPreview">
@@ -73,11 +72,11 @@ function DocumentPreview({ file, onClose }) {
             <p>{error}</p>
           </div>
         ) : fileContent.type === "pdf" ? (
-          <embed 
-            src={fileContent.url} 
-            type="application/pdf" 
-            width="100%" 
-            height="100%" 
+          <embed
+            src={fileContent.url}
+            type="application/pdf"
+            width="100%"
+            height="100%"
           />
         ) : (
           <div className="UnsupportedPreview">
@@ -92,8 +91,15 @@ function DocumentPreview({ file, onClose }) {
 }
 
 function Mainpage() {
-  const [chats, setChats] = useState([{ id: 1, history: [], pinned: false, name: "New Chat" }]);
-  const [currentChat, setCurrentChat] = useState(1);
+  const navigate = useNavigate();
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem('user');
+    const isGuest = localStorage.getItem('isGuest') === 'true';
+    return storedUser ? JSON.parse(storedUser) : isGuest ? { isGuest: true } : null;
+  });
+
+  const [chats, setChats] = useState([]);
+  const [currentChat, setCurrentChat] = useState(null);
   const [query, setQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,11 +113,69 @@ function Mainpage() {
   const fileInputRef = useRef(null);
   const chatAreaRef = useRef(null);
 
-  const getCurrentChat = () => chats.find((chat) => chat.id === currentChat);
+  useEffect(() => {
+    const updateUser = () => {
+      const storedUser = localStorage.getItem('user');
+      const isGuest = localStorage.getItem('isGuest') === 'true';
+      setUser(storedUser ? JSON.parse(storedUser) : isGuest ? { isGuest: true } : null);
+    };
+
+    updateUser();
+    window.addEventListener('storage', updateUser);
+
+    return () => {
+      window.removeEventListener('storage', updateUser);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user && !user.isGuest) {
+      fetchChatHistory();
+    }
+  }, [user]);
+
+  const fetchChatHistory = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/chat/history', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const fetchedChats = response.data.chats.map(chat => ({
+        id: chat.id,
+        name: chat.name,
+        history: chat.history || [],
+        pinned: chat.pinned
+      }));
+      setChats(fetchedChats);
+      if (fetchedChats.length > 0 && !currentChat) {
+        setCurrentChat(fetchedChats[0].id);
+      }
+    } catch (err) {
+      console.error("Error fetching chat history:", err);
+      setError("Failed to load chat history.");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("isGuest");
+    setUser(null);
+    setChats([]);
+    setCurrentChat(null);
+    navigate("/login");
+  };
+
+  const getCurrentChat = () => {
+    const chat = chats.find((chat) => chat.id === currentChat);
+    return chat || { id: null, history: [], name: "" };
+  };
 
   const handleFileSelection = (event) => {
     const file = event.target.files[0];
-    processFile(file);
+    if (file) {
+      processFile(file);
+    }
   };
 
   const handleDrop = (event) => {
@@ -132,11 +196,6 @@ function Mainpage() {
       setSelectedFile(null);
     } else {
       setSelectedFile(file);
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === currentChat ? { ...chat, name: file.name.split('.')[0] } : chat
-        )
-      );
       setError(null);
     }
   };
@@ -152,22 +211,51 @@ function Mainpage() {
       setIsLoading(true);
       setError(null);
 
-      // Add user message to history immediately
       const userMessage = {
         type: "user",
         content: isSummary ? "Summarize the document" : query.trim(),
-        file: selectedFile ? selectedFile : null,
+        file: selectedFile ? selectedFile.name : null,
         timestamp: new Date().toLocaleTimeString(),
       };
-      updateHistory(userMessage);
+
+      // Create a new chat if none exists
+      if (!currentChat) {
+        const newChatId = Date.now().toString();
+        const newChat = { 
+          id: newChatId, 
+          name: "New Chat", 
+          history: [userMessage], 
+          pinned: false 
+        };
+        setChats(prev => [...prev, newChat]);
+        setCurrentChat(newChatId);
+      } else {
+        // Add user message to current chat history
+        const updatedChats = chats.map(chat => {
+          if (chat.id === currentChat) {
+            return {
+              ...chat,
+              history: [...(chat.history || []), userMessage]
+            };
+          }
+          return chat;
+        });
+        setChats(updatedChats);
+      }
 
       const formData = new FormData();
       if (selectedFile) formData.append('file', selectedFile);
       formData.append('query', isSummary ? "Summarize the document" : query.trim());
+      formData.append('chat_id', currentChat || Date.now().toString());
+      formData.append('chat_name', getCurrentChat().name || "New Chat");
 
       try {
-        const response = await axios.post('http://localhost:5001/process-document', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+        const token = localStorage.getItem('token');
+        const response = await axios.post('http://localhost:5000/document/process-document', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`
+          }
         });
 
         const responseEntry = {
@@ -176,70 +264,194 @@ function Mainpage() {
           timestamp: new Date().toLocaleTimeString(),
         };
 
-        updateHistory(responseEntry);
+        // Add bot response to chat history
+        const updatedChats = chats.map(chat => {
+          if (chat.id === currentChat) {
+            return {
+              ...chat,
+              history: [...(chat.history || []), responseEntry]
+            };
+          }
+          return chat;
+        });
+        setChats(updatedChats);
+
+        // Refresh chat history for persistent storage
+        await fetchChatHistory();
+
         if (!isSummary) setQuery("");
         setSelectedFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
       } catch (error) {
         const errorMessage = error.response?.data?.error || "An unexpected error occurred";
-        updateHistory({ 
-          type: "error", 
-          content: errorMessage, 
-          timestamp: new Date().toLocaleTimeString() 
-        });
         setError(errorMessage);
+        
+        // Add error message to chat history
+        const errorEntry = {
+          type: "error",
+          content: errorMessage,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+        
+        const updatedChats = chats.map(chat => {
+          if (chat.id === currentChat) {
+            return {
+              ...chat,
+              history: [...(chat.history || []), errorEntry]
+            };
+          }
+          return chat;
+        });
+        setChats(updatedChats);
       } finally {
         setIsLoading(false);
       }
     }
   };
 
-  const updateHistory = (entry) => {
-    setChats((prevChats) =>
-      prevChats.map((chat) =>
-        chat.id === currentChat ? { ...chat, history: [...chat.history, entry] } : chat
-      )
-    );
-  };
-
-  const handleNewChat = () => {
-    const newChatId = Date.now();
-    setChats([...chats, { id: newChatId, history: [], pinned: false, name: "New Chat" }]);
+  const handleNewChat = async () => {
+    const newChatId = Date.now().toString();
+    const newChat = {
+      id: newChatId,
+      name: "New Chat",
+      history: [],
+      pinned: false
+    };
+    
+    setChats(prev => [...prev, newChat]);
     setCurrentChat(newChatId);
     setQuery("");
     setSelectedFile(null);
     setError(null);
-  };
-
-  const deleteChat = (chatId) => {
-    if (window.confirm("Are you sure you want to delete this chat?")) {
-      setChats((prev) => prev.filter((chat) => chat.id !== chatId));
-      if (currentChat === chatId && chats.length > 1) {
-        setCurrentChat(chats.find(chat => chat.id !== chatId).id);
+    
+    if (user && !user.isGuest) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.post('http://localhost:5000/chat/create', {
+          name: "New Chat"
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        await fetchChatHistory();
+      } catch (err) {
+        console.error("Error creating new chat:", err);
       }
     }
   };
 
-  const editChat = (chatId) => {
-    const newName = prompt("Enter new chat name:", chats.find((chat) => chat.id === chatId).name);
-    if (newName && newName.trim() !== "") {
-      setChats((prev) =>
-        prev.map((chat) => (chat.id === chatId ? { ...chat, name: newName.trim() } : chat))
-      );
+  const deleteChat = async (chatId, e) => {
+    e.stopPropagation();
+    
+    if (window.confirm("Are you sure you want to delete this chat?")) {
+      try {
+        const updatedChats = chats.filter(chat => chat.id !== chatId);
+        setChats(updatedChats);
+        
+        if (currentChat === chatId) {
+          if (updatedChats.length > 0) {
+            setCurrentChat(updatedChats[0].id);
+          } else {
+            setCurrentChat(null);
+          }
+        }
+        
+        if (user && !user.isGuest) {
+          const token = localStorage.getItem('token');
+          await axios.delete(`http://localhost:5000/chat/${chatId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+      } catch (err) {
+        console.error("Error deleting chat:", err);
+        setError("Failed to sync deletion with server, but chat was removed locally.");
+      }
     }
   };
 
-  const pinChat = (chatId) => {
-    setChats((prev) =>
-      prev.map((chat) => (chat.id === chatId ? { ...chat, pinned: !chat.pinned } : chat))
-    );
+  const editChat = async (chatId, e) => {
+    e.stopPropagation();
+    
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+    
+    const newName = prompt("Enter new chat name:", chat.name);
+    if (newName && newName.trim() !== "") {
+      try {
+        const updatedChats = chats.map(c => {
+          if (c.id === chatId) {
+            return { ...c, name: newName.trim() };
+          }
+          return c;
+        });
+        setChats(updatedChats);
+        
+        if (user && !user.isGuest) {
+          const token = localStorage.getItem('token');
+          await axios.put(`http://localhost:5000/chat/${chatId}/rename`, { 
+            name: newName.trim() 
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+      } catch (err) {
+        console.error("Error renaming chat:", err);
+        setError("Failed to sync rename with server, but chat was renamed locally.");
+      }
+    }
   };
 
-  const clearChat = () => {
-    if (window.confirm("Clear all messages in this chat?")) {
-      setChats((prev) =>
-        prev.map((chat) => (chat.id === currentChat ? { ...chat, history: [] } : chat))
-      );
+  const pinChat = async (chatId, e) => {
+    e.stopPropagation();
+    
+    try {
+      const chat = chats.find(c => c.id === chatId);
+      if (!chat) return;
+      
+      const newPinnedStatus = !chat.pinned;
+      
+      const updatedChats = chats.map(c => {
+        if (c.id === chatId) {
+          return { ...c, pinned: newPinnedStatus };
+        }
+        return c;
+      });
+      setChats(updatedChats);
+      
+      if (user && !user.isGuest) {
+        const token = localStorage.getItem('token');
+        await axios.put(`http://localhost:5000/chat/${chatId}/pin`, {
+          pinned: newPinnedStatus
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+    } catch (err) {
+      console.error("Error toggling pin status:", err);
+      setError("Failed to sync pin status with server, but chat was updated locally.");
+    }
+  };
+
+  const clearChat = async () => {
+    if (currentChat && window.confirm("Clear all messages in this chat?")) {
+      try {
+        const updatedChats = chats.map(chat => {
+          if (chat.id === currentChat) {
+            return { ...chat, history: [] };
+          }
+          return chat;
+        });
+        setChats(updatedChats);
+        
+        if (user && !user.isGuest) {
+          const token = localStorage.getItem('token');
+          await axios.delete(`http://localhost:5000/chat/${currentChat}/messages`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+      } catch (err) {
+        console.error("Error clearing chat:", err);
+        setError("Failed to sync clearing with server, but chat was cleared locally.");
+      }
     }
   };
 
@@ -254,12 +466,17 @@ function Mainpage() {
 
   const filteredChats = chats
     .filter((chat) => chat.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => b.pinned - a.pinned);
+    .sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.id - a.id;
+    });
 
   const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
   const openFilePreview = (file) => {
     setPreviewFile(file);
+    setIsSidebarCollapsed(true);
   };
 
   const closePreview = () => {
@@ -268,18 +485,13 @@ function Mainpage() {
 
   const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
-  const handleLogout = () => {
-    alert("Logged out successfully!");
-    setShowAccountMenu(false);
-  };
-
   useEffect(() => {
     inputRef.current?.focus();
     if (chatAreaRef.current) {
       chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
     }
     document.body.className = isDarkMode ? "dark-mode" : "";
-  }, [chats, isDarkMode]);
+  }, [chats, currentChat, isDarkMode]);
 
   const Message = ({ item }) => {
     return (
@@ -295,13 +507,13 @@ function Mainpage() {
               {item.file && (
                 <div className="FileAttachment" onClick={() => openFilePreview(item.file)}>
                   <FileText size={16} />
-                  <span>{item.file.name}</span>
+                  <span>{typeof item.file === 'string' ? item.file : item.file.name}</span>
                 </div>
               )}
             </div>
           </div>
         )}
-        
+
         {item.type === "response" && (
           <div className="ChatBubble ResponseBubble">
             <div className="MessageHeader">
@@ -313,13 +525,13 @@ function Mainpage() {
                 rehypePlugins={[rehypeHighlight]}
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  code({node, inline, className, children, ...props}) {
+                  code({ node, inline, className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline ? (
                       <div className="code-block">
                         <div className="code-header">
                           <span>{match ? match[1] : 'code'}</span>
-                          <button 
+                          <button
                             onClick={() => copyToClipboard(String(children))}
                             title="Copy code"
                           >
@@ -336,7 +548,7 @@ function Mainpage() {
                       </code>
                     );
                   },
-                  table({children}) {
+                  table({ children }) {
                     return <div className="table-container"><table>{children}</table></div>;
                   }
                 }}
@@ -351,7 +563,7 @@ function Mainpage() {
             </div>
           </div>
         )}
-        
+
         {item.type === "error" && (
           <div className="ChatBubble ErrorBubble">
             <div className="MessageHeader">
@@ -367,16 +579,38 @@ function Mainpage() {
     );
   };
 
+  const handleSummarize = () => {
+    if (selectedFile) {
+      handleQuerySubmit(true);
+    } else {
+      setError("Please upload a document first to summarize");
+    }
+  };
+
   return (
     <div className={`Mainpage ${isDarkMode ? "dark-mode" : ""}`} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
       <div className={`Sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
         <div className="SidebarTop">
-          <h1 className="AppTitle">InsightPaper</h1>
+          {!isSidebarCollapsed && <h1 className="AppTitle">InsightPaper</h1>}
           <button className="NewChatButton" onClick={handleNewChat}>
-            <Plus size={20} /> {!isSidebarCollapsed && "New Chat"}
+            {isSidebarCollapsed ? <Plus size={20} /> : <><Plus size={20} /> New Chat</>}
           </button>
         </div>
-        {!isSidebarCollapsed && (
+        
+        {isSidebarCollapsed ? (
+          <ul className="HistoryList">
+            {filteredChats.map((chat) => (
+              <li
+                key={chat.id}
+                className={`HistoryItem ${chat.id === currentChat ? "active" : ""} ${chat.pinned ? "pinned" : ""}`}
+                onClick={() => setCurrentChat(chat.id)}
+                title={chat.name}
+              >
+                <MessageSquare size={20} />
+              </li>
+            ))}
+          </ul>
+        ) : (
           <>
             <div className="SearchBox">
               <Search size={18} />
@@ -394,9 +628,11 @@ function Mainpage() {
             </div>
             <div className="SidebarHeader">
               <h2 className="SidebarTitle">History</h2>
-              <button className="ClearChatButton" onClick={clearChat} title="Clear current chat">
-                <Trash size={16} />
-              </button>
+              {currentChat && (
+                <button className="ClearChatButton" onClick={clearChat} title="Clear current chat">
+                  <Trash size={16} />
+                </button>
+              )}
             </div>
             <ul className="HistoryList">
               {filteredChats.map((chat) => (
@@ -408,28 +644,41 @@ function Mainpage() {
                   {chat.pinned && <Pin size={16} />}
                   <span className="ChatName">{chat.name}</span>
                   <div className="ChatActions">
-                    <button title="Edit chat name" onClick={(e) => { e.stopPropagation(); editChat(chat.id); }}>
+                    <button title="Edit chat name" onClick={(e) => editChat(chat.id, e)}>
                       <Edit size={16} />
                     </button>
-                    <button title="Delete chat" onClick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}>
+                    <button title="Delete chat" onClick={(e) => deleteChat(chat.id, e)}>
                       <Trash2 size={16} />
                     </button>
-                    <button title={chat.pinned ? "Unpin chat" : "Pin chat"} onClick={(e) => { e.stopPropagation(); pinChat(chat.id); }}>
+                    <button 
+                      title={chat.pinned ? "Unpin chat" : "Pin chat"} 
+                      onClick={(e) => pinChat(chat.id, e)}
+                      style={{ color: chat.id === currentChat ? '#004aad' : 'white' }}
+                    >
                       <Pin size={16} />
                     </button>
                   </div>
                 </li>
               ))}
             </ul>
-            <div className="AccountSection">
-              <button className="AccountButton" onClick={() => setShowAccountMenu(!showAccountMenu)}>
-                <User size={20} />
-                {!isSidebarCollapsed && <span>Account</span>}
-              </button>
-              {showAccountMenu && (
-                <div className="AccountMenu">
+          </>
+        )}
+        
+        <div className="AccountSection">
+          <button className="AccountButton" onClick={() => setShowAccountMenu(!showAccountMenu)}>
+            <User size={20} />
+            {!isSidebarCollapsed && <span>{user?.username || (user?.isGuest ? 'Guest' : 'Account')}</span>}
+          </button>
+          {showAccountMenu && (
+            <div className="AccountMenu">
+              {user && !user.isGuest ? (
+                <>
+                  <div className="AccountInfo">
+                    <div className="AccountEmail">{user.email}</div>
+                    <div className="AccountUsername">@{user.username}</div>
+                  </div>
                   <button onClick={toggleDarkMode}>
-                    {isDarkMode ? <Sun size={18} /> : <Moon size={18} />} 
+                    {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
                     {isDarkMode ? "Light Mode" : "Dark Mode"}
                   </button>
                   <button onClick={() => alert("Settings coming soon!")}>
@@ -438,12 +687,26 @@ function Mainpage() {
                   <button onClick={handleLogout}>
                     <LogOut size={18} /> Logout
                   </button>
-                </div>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => navigate('/login')}>
+                    <LogIn size={18} /> Sign In
+                  </button>
+                  <button onClick={() => navigate('/login', { state: { showRegister: true } })}>
+                    <UserPlus size={18} /> Register
+                  </button>
+                  <div className="GuestWarning">
+                    <AlertCircle size={18} />
+                    <span>Guest session - history won't be saved</span>
+                  </div>
+                </>
               )}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
+      
       <button className="CollapseButton" onClick={toggleSidebar}>
         <ChevronLeft size={20} style={{ transform: isSidebarCollapsed ? "rotate(180deg)" : "none" }} />
       </button>
@@ -451,7 +714,7 @@ function Mainpage() {
       <div className={`RightPanel ${previewFile ? "with-preview" : ""}`}>
         <div className="ChatContainer">
           <div className="ChatArea" ref={chatAreaRef}>
-            {getCurrentChat().history.length > 0 ? (
+            {getCurrentChat().history && getCurrentChat().history.length > 0 ? (
               getCurrentChat().history.map((item, index) => (
                 <Message key={index} item={item} />
               ))
@@ -461,6 +724,12 @@ function Mainpage() {
                   <FileText size={48} />
                 </div>
                 <h3>Welcome to InsightPaper</h3>
+                {user?.isGuest && (
+                  <div className="GuestNotification">
+                    <AlertTriangle size={18} />
+                    <p>You're in guest mode. Your chat history won't be saved.</p>
+                  </div>
+                )}
                 <p>Upload a research paper or ask a question to get started.</p>
                 <div className="TipsSection">
                   <h4>Try asking:</h4>
@@ -507,17 +776,9 @@ function Mainpage() {
               disabled={isLoading}
               rows={1}
             />
-            <button 
-              className="SummaryButton" 
-              onClick={() => handleQuerySubmit(true)} 
-              disabled={isLoading || !selectedFile}
-              title="Summarize document"
-            >
-              Summarize
-            </button>
-            <button 
-              className="SendButton" 
-              onClick={handleQuerySubmit} 
+            <button
+              className="SendButton"
+              onClick={() => handleQuerySubmit()}
               disabled={isLoading || (query.trim() === "" && !selectedFile)}
               title="Send message"
             >
@@ -530,9 +791,17 @@ function Mainpage() {
                 <FileText size={18} />
                 <span>{selectedFile.name}</span>
               </div>
-              <button onClick={removeFile} title="Remove file">
-                <X size={18} />
-              </button>
+              <div className="FileActions">
+                <button onClick={handleSummarize} title="Summarize document">
+                  <FileText size={18} /> Summarize
+                </button>
+                <button onClick={() => openFilePreview(selectedFile)} title="Preview document">
+                  <FileText size={18} /> Preview
+                </button>
+                <button onClick={removeFile} title="Remove file">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
           )}
           {error && (
@@ -547,9 +816,7 @@ function Mainpage() {
         </div>
 
         {previewFile && (
-          <div className="DocumentPreviewContainer">
-            <DocumentPreview file={previewFile} onClose={closePreview} />
-          </div>
+          <DocumentPreview file={previewFile} onClose={closePreview} />
         )}
       </div>
     </div>
