@@ -4,6 +4,8 @@
     --white: #fff;
     --black:#013e8d; 
     --lightBulue: #17a;
+    --success: #28a745;
+    --error: #dc3545;
     
     display: flex;
     justify-content: center;
@@ -128,6 +130,28 @@
 .auth-container .input-box input:focus ~ i,
 .auth-container .input-box input:valid ~ i {
     color: var(--lightBulue);
+}
+
+/* Message container styles */
+.auth-container .message-container {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.auth-container .message-container.success {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.auth-container .message-container.error {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: var(--error);
+    border: 1px solid var(--error);
 }
 
 .auth-container form button {

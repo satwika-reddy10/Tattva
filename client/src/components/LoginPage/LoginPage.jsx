@@ -4,28 +4,53 @@ import 'boxicons'; // Import Boxicons (if using a package)
 
 const LoginPage = () => {
   const [isActive, setIsActive] = useState(false);
+  const [loginMessage, setLoginMessage] = useState('');
+  const [loginMessageType, setLoginMessageType] = useState(''); // 'success' or 'error'
+  const [registerMessage, setRegisterMessage] = useState('');
+  const [registerMessageType, setRegisterMessageType] = useState(''); // 'success' or 'error'
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     const username = e.target[0].value;
     const password = e.target[1].value;
 
+    // Clear previous messages
+    setLoginMessage('');
+
     try {
-      const response = await fetch("http://localhost:5000/login", {
+      const response = await fetch("http://localhost:5000/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
       });
+
       const data = await response.json();
-      if (response.ok) {
-        alert("Login successful!");
-        localStorage.setItem("token", data.token); // Store token
-        window.location.href = "/landing"; // Redirect to landing page
+
+      // Log the response for debugging
+      console.log("Login response:", response.status, data);
+
+      // Check if the response contains a token (which indicates success)
+      if (data.token) {
+        setLoginMessage("Login successful!");
+        setLoginMessageType("success");
+
+        // Store both token and user data
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user)); // Ensure user object is stored
+
+        // Delay navigation to allow user to see the success message
+        setTimeout(() => {
+          window.location.href = "/Main"; // Redirect to main page
+        }, 1000);
       } else {
-        alert(data.message);
+        // Display the error message from the server or a default message
+        setLoginMessage(data.message || "Username or password is incorrect");
+        setLoginMessageType("error");
       }
     } catch (error) {
-      console.error(error);
+      console.error("Login error:", error);
+      setLoginMessage("Connection error. Please try again later.");
+      setLoginMessageType("error");
     }
   };
 
@@ -35,16 +60,32 @@ const LoginPage = () => {
     const email = e.target[1].value;
     const password = e.target[2].value;
 
+    // Clear previous messages
+    setRegisterMessage('');
+
     try {
-      const response = await fetch("http://localhost:5000/signup", {
+      const response = await fetch("http://localhost:5000/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, email, password })
       });
+
       const data = await response.json();
-      alert(data.message);
+
+      // Log the response for debugging
+      console.log("Register response:", response.status, data);
+
+      if (response.ok || data.success) {
+        setRegisterMessage(data.message || "Registration successful!");
+        setRegisterMessageType("success");
+      } else {
+        setRegisterMessage(data.message || "Registration failed. Please try again.");
+        setRegisterMessageType("error");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("Registration error:", error);
+      setRegisterMessage("Connection error. Please try again later.");
+      setRegisterMessageType("error");
     }
   };
 
@@ -69,6 +110,15 @@ const LoginPage = () => {
               <i className="bx bxs-lock-alt"></i>
             </div>
 
+            {loginMessage && (
+              <div
+                className={`message-container animation ${loginMessageType}`}
+                style={{ "--i": 2.5, "--j": 23.5 }}
+              >
+                {loginMessage}
+              </div>
+            )}
+
             <button type="submit" className="btn animation" style={{ "--i": 3, "--j": 24 }}>
               Login
             </button>
@@ -82,6 +132,7 @@ const LoginPage = () => {
                   onClick={(e) => {
                     e.preventDefault();
                     setIsActive(true);
+                    setLoginMessage('');
                   }}
                 >
                   Sign Up
@@ -119,6 +170,15 @@ const LoginPage = () => {
               <i className="bx bxs-lock-alt"></i>
             </div>
 
+            {registerMessage && (
+              <div
+                className={`message-container animation ${registerMessageType}`}
+                style={{ "--i": 20.5, "--j": 3.5 }}
+              >
+                {registerMessage}
+              </div>
+            )}
+
             <button type="submit" className="btn animation" style={{ "--i": 21, "--j": 4 }}>
               Sign Up
             </button>
@@ -132,6 +192,7 @@ const LoginPage = () => {
                   onClick={(e) => {
                     e.preventDefault();
                     setIsActive(false);
+                    setRegisterMessage('');
                   }}
                 >
                   Login
