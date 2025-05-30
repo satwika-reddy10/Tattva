@@ -11,7 +11,7 @@ Database: MongoDB (Cloud-based storage)
 Additional Tools: Langchain, ChromaDB, Vector Stores
 📌 How to Run the Project
 1️⃣ Clone the Repository
-git clone https://github.com/your-username/InsightPaper.git
+git clone https://github.com/your-username/Tattva.git
 cd InsightPaper
 
 2️⃣ Install Dependencies
